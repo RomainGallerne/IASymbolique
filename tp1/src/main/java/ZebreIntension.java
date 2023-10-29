@@ -103,4 +103,4 @@ public class ZebreIntension {
 }
 
 // 1 et 2
-/*La solution que vous avez obtenue avec le modèle intensionnel est la même que celle obtenue avec le modèle extensionnel. Par conséquent, les deux modèles sont correctement formulés et cohérents entre eux. */
+/*La solution obtenue avec le modèle intensionnel est la même que celle obtenue avec le modèle extensionnel. Par conséquent, les deux modèles sont correctement formulés et cohérents entre eux. */
