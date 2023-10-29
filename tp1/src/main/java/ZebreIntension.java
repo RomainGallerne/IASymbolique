@@ -38,9 +38,6 @@ public class ZebreIntension {
         IntVar Parliament = model.intVar("Parliament", 1, 5);
 
         // Contraintes
-        // ... [Déclaration des variables comme précédemment]
-
-        // Contraintes
         model.arithm(English, "=", Red).post();
         model.arithm(Spanish, "=", Dog).post();
         model.arithm(Coffee, "=", Green).post();
