@@ -1,12 +1,13 @@
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Scanner;
 
 import org.chocosolver.solver.Model;
 import org.chocosolver.solver.Solution;
 import org.chocosolver.solver.Solver;
 import org.chocosolver.solver.constraints.extension.Tuples;
 import org.chocosolver.solver.variables.IntVar;
+
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 
 public class Expe {
 	
@@ -45,9 +46,9 @@ public class Expe {
 		return model;
 	}	
 	
-	private static double tauxSol(String f,int nbRes) throws Exception{
-		int nbSat = 0;
-		Solver getSolv;
+	    private static double[] tauxSol(String f,int nbRes) throws Exception{
+		double nbSat = 0.0;
+		double timeOut = 0.0;
 		String temps = "10s";
 		
 		BufferedReader readFile = new BufferedReader(new FileReader(f));
@@ -56,39 +57,63 @@ public class Expe {
 			Model model=lireReseau(readFile);
 			if(model==null) {
 				System.out.println("Problème de lecture de fichier !\n");
-				return -1;
-			} else {
-				getSolv = model.getSolver();
+				return null;
 			}
-			
 			//Recherche des solutions du modèles nb
-			getSolv.limitTime(temps);
-			if (getSolv.solve()){nbSat++;} 
-			else if (getSolv.isStopCriterionMet()){
+			model.getSolver().limitTime(temps);
+			if (model.getSolver().solve()){nbSat+=1.0;} 
+			else if (model.getSolver().isStopCriterionMet()){
+				timeOut += 1.0;
 				System.out.println("Le solveur n'a pu trouver aucune solution en moins de "+temps+".");
 			} else {
 				//System.out.println("Le solveur a tout exploré et n'a trouvé aucune solution.");
 			}
 		}
-		return (double)nbSat/(double)nbRes*100.0;
+		double[] resultats = {(nbSat/(double)nbRes)*100.0,timeOut};
+		return resultats;
 	}
 	
 	private static void csvGenerateur(int nbContraintes,int nbTuples,int nbRes) throws Exception {
-	    
+		ThreadMXBean thread = ManagementFactory.getThreadMXBean();
+		
 		//Initialisation du fichier CSV
-	    File fCSV = new File("benchmark/densite-"+Math.round((double)nbContraintes*100.0/300.0)+"/CSV"+nbTuples+"tuples"+nbRes+"res.csv");
+	    File fCSV = new File("benchmark/densite-"+Math.round((double)nbContraintes*100.0/782.0)+"/CSV"+nbTuples+"tuples"+nbRes+"res.csv");
 	    BufferedWriter bwCSV = new BufferedWriter(new FileWriter(fCSV));
-	    bwCSV.write("Nombre de tuples,Taux de reseaux satisfaits");
+	    bwCSV.write("NbTuples,TauxResSatis,TpsExecMoyen(ms),TimeOuts");
 	    bwCSV.newLine();
 	    
 	    //Remplissage du fichier CSV
-	    int t=50;
+	    int t=100;
 	    String f;
+	    long tauxSolMoyen,nbTimeOutTotal;
+	    double[] retourTauxSol;
+	    double[] Tps = new double[5];
+	    long debutCPU,debutUser;
+	    double maxTps,minTps,moyenTps,sum;
 	    while(t<=nbTuples) {
-	    	f = "CSP/nbContraintes-"+nbContraintes+"/csp-25-40-"+nbContraintes+"-"+nbTuples+"-"+nbRes+".txt";
-	    	bwCSV.write(t+","+tauxSol(f,nbRes)); //nbTuples,taux de réseaux satisfaits
+	    	tauxSolMoyen=0;
+	    	nbTimeOutTotal=0;
+	    	f = "CSP/nbContraintes-"+nbContraintes+"/csp-40-25-"+nbContraintes+"-"+t+"-"+nbRes+".txt";
+	    	for(int i=0;i<5;i++) {
+	    		debutCPU=thread.getCurrentThreadCpuTime();
+	    		debutUser= thread.getCurrentThreadUserTime();
+	    		
+	    		retourTauxSol = tauxSol(f,nbRes);
+	    		
+	    		Tps[i] = (thread.getCurrentThreadCpuTime()-debutCPU)-(thread.getCurrentThreadUserTime()-debutUser);
+	    		tauxSolMoyen += retourTauxSol[0];
+	    		nbTimeOutTotal += retourTauxSol[1];
+	    	}
+	    	maxTps = Math.max(Math.max(Math.max(Math.max(Tps[0],Tps[1]),Tps[2]),Tps[3]),Tps[4]);
+	    	minTps = Math.min(Math.min(Math.min(Math.min(Tps[0],Tps[1]),Tps[2]),Tps[3]),Tps[4]);
+	    	sum=0.0;
+	    	for(double tp : Tps) {sum+=tp;}
+	    	moyenTps = (sum-(maxTps+minTps))/3.0;
+	    	tauxSolMoyen /= 5;
+	    	
+	    	bwCSV.write(t+","+tauxSolMoyen+","+Math.round(moyenTps*Math.pow(10.0,-6.0))+","+(int)nbTimeOutTotal); //nbTuples,taux de réseaux satisfaits en moyenne, temps de résolution moyen
 	    	bwCSV.newLine();
-	        t+=50;
+	        t+=5;
 	    }
 	    bwCSV.close();
 	}
@@ -97,7 +122,7 @@ public class Expe {
 		//Génération de tous les CSV possibles
 		int progression = 0;
 		for(int nbContr : tabContraintes) {
-			System.out.println("-> Génération des CSV de densité "+Math.round((double)nbContr*100.0/300.0));
+			System.out.println("-> Génération des CSV de densité "+Math.round((double)nbContr*100.0/782.0));
 			for(int nbRes : tabRes) {
 				csvGenerateur(nbContr,nbTuples,nbRes);
 				progression ++;
@@ -128,7 +153,7 @@ public class Expe {
 		System.out.println("<-------------------TEST DE BENCHSATISF ET BENCHINSAT------------------------->");
 		
 		//Test du programme sur les fichiers "benchSatisf" et "benchInsat"
-		String [] file = {"benchSatisf.txt","benchInsat.txt"};
+		String [] file = {"benchSatisf.txt","benchInsat.txt","bench.txt"};
 		int nbSat;
 		for (String f : file) {
 			BufferedReader buff = new BufferedReader(new FileReader(f));
@@ -141,7 +166,7 @@ public class Expe {
 				}
 				if (model.getSolver().findSolution() != null) {nbSat++;} //Le modèle a-t-il une solution ?
 			}
-			System.out.println(f + " -> " + nbSat + " réseaux satisfaits soit "+tauxSol(f,nbRes)+"%.");
+			System.out.println(f + " -> " + nbSat + " réseaux satisfaits soit "+tauxSol(f,nbRes)[0]+"%.");
 		}
 		
 		System.out.println();
@@ -160,19 +185,15 @@ public class Expe {
 			System.out.println("Fichier CSV généré avec succès.");
 		}*/
 		
-		int nbTuplesCSV = 1550;
+		int nbTuplesCSV = 400;
 		
-		//Valeurs de tabRes possibles : {3,10,15,20}
-		//int [] tabRes = {3,10,15};
-		int [] tabRes = {3};
+		//Valeurs de tabRes possibles :
+		int [] tabRes = {15};
 		
-		//Niveau de dureté 25%, 50%, 75
-		//int [] tabContraintes = {75,150,225};
-		int [] tabContraintes = {150};
+		//Valeurs de densité : 13%, 26%, 38%
+		int [] tabContraintes = {100,200,300};
 		
 		genToutCSV(tabContraintes,nbTuplesCSV,tabRes);
-		
-		
 	}
 	
 	
